@@ -128,9 +128,9 @@ int main()
     string input;
     cout << "Input message: ";
     getline(cin, input);
-    while (input != "") {
+    while (true) {
         sha256(input);
-        cout << "\nInput message (leave empty + enter to exit): ";
+        cout << "\nInput message: ";
         getline(cin, input);
     }
 
