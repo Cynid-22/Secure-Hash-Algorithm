@@ -115,6 +115,12 @@ class StatusIndicator(tk.Frame):
         self._stop_animation()
         self.label.config(text="Complete")
         self._draw_check_mark()
+    
+    def set_input_changed(self):
+        """Set status to input changed with a red X."""
+        self._stop_animation()
+        self.label.config(text="Input changed")
+        self._draw_x_mark()
         
     def _draw_check_mark(self):
         """Draw a green check mark."""
@@ -123,6 +129,15 @@ class StatusIndicator(tk.Frame):
         self.canvas.create_oval(2, 2, 18, 18, outline="green", width=2)
         # Draw check
         self.canvas.create_line(5, 10, 9, 14, 15, 6, fill="green", width=2)
+    
+    def _draw_x_mark(self):
+        """Draw a red X mark."""
+        self.canvas.delete("all")
+        # Draw circle
+        self.canvas.create_oval(2, 2, 18, 18, outline="red", width=2)
+        # Draw X
+        self.canvas.create_line(6, 6, 14, 14, fill="red", width=2)
+        self.canvas.create_line(14, 6, 6, 14, fill="red", width=2)
         
     def _animate_spinner(self):
         """Animate a rotating spinner."""
@@ -170,9 +185,6 @@ class SecureHashGUI:
         self.root.geometry("750x450")
         self.root.resizable(False, False)
         
-        # Remove window icon (delayed to prevent tkinter from overriding)
-        self.root.after(200, self._remove_icon)
-        
         # Center the window on screen
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -181,22 +193,6 @@ class SecureHashGUI:
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
     
-    
-    def _remove_icon(self) -> None:
-        """Remove the window icon by setting it to a transparent image."""
-        try:
-            # Create a transparent 1x1 pixel image
-            # This effectively makes the icon invisible
-            blank_icon = tk.PhotoImage(width=1, height=1)
-            blank_icon.blank()
-            self.root.iconphoto(True, blank_icon)
-        except Exception:
-            # If that fails, try the empty bitmap approach
-            try:
-                self.root.iconbitmap('')
-            except:
-                pass
-        
     def _create_widgets(self) -> None:
         """Create and layout all GUI widgets."""
         # Configure padding
@@ -222,7 +218,7 @@ class SecureHashGUI:
             width=20
         )
         self.algorithm_combo.pack(side=tk.LEFT, padx=(10, 0))
-        self.algorithm_combo.bind('<<ComboboxSelected>>', self._calculate_hash)
+        self.algorithm_combo.bind('<<ComboboxSelected>>', self._on_input_change)
         
         # Input text section
         ttk.Label(self.root, text="Input:").pack(
@@ -236,7 +232,7 @@ class SecureHashGUI:
             wrap=tk.WORD
         )
         self.input_text.pack(padx=pad_x, pady=(0, pad_y))
-        self.input_text.bind('<Key>', lambda e: self.root.after_idle(self._calculate_hash))
+        self.input_text.bind('<Key>', self._on_input_change)
         
         # Buttons frame
         button_frame = ttk.Frame(self.root)
@@ -286,6 +282,13 @@ class SecureHashGUI:
             command=self._copy_result,
             width=8
         ).pack(side=tk.LEFT, padx=(10, 0), anchor=tk.N)
+    
+    def _on_input_change(self, event=None) -> None:
+        """Handle input change event."""
+        # Show input changed status
+        self.status_indicator.set_input_changed()
+        # Schedule hash calculation
+        self.root.after_idle(self._calculate_hash)
         
     def _browse_file(self) -> None:
         """Open file dialog and load file contents into input text box."""
@@ -302,6 +305,7 @@ class SecureHashGUI:
                     self.input_text.delete('1.0', tk.END)
                     self.input_text.insert('1.0', content)
                     self.binary_content = None
+                    self.status_indicator.set_input_changed()
             except UnicodeDecodeError:
                 # If file is binary, read as bytes and display info
                 try:
@@ -315,6 +319,7 @@ class SecureHashGUI:
                         )
                         # Store the binary content for hashing
                         self.binary_content = content
+                        self.status_indicator.set_input_changed()
                 except Exception as ex:
                     messagebox.showerror("Error", f"Error reading file: {ex}")
             except Exception as ex:
