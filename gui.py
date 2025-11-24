@@ -260,22 +260,22 @@ class SecureHashGUI:
         )
         
         result_frame = ttk.Frame(self.root)
-        result_frame.pack(fill=tk.X, padx=pad_x, pady=(0, pad_y))
+        result_frame.pack(fill=tk.BOTH, expand=True, padx=pad_x, pady=(0, pad_y))
         
-        self.result_text = tk.Entry(
+        self.result_text = scrolledtext.ScrolledText(
             result_frame,
-            state="readonly",
-            readonlybackground="white",
+            height=4,
+            state="disabled",
             font=("Courier", 9)
         )
-        self.result_text.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.result_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
         ttk.Button(
             result_frame,
             text="Copy",
             command=self._copy_result,
             width=8
-        ).pack(side=tk.LEFT, padx=(10, 0))
+        ).pack(side=tk.LEFT, padx=(10, 0), anchor=tk.N)
         
     def _browse_file(self) -> None:
         """Open file dialog and load file contents into input text box."""
@@ -368,13 +368,13 @@ class SecureHashGUI:
             text: The text to display
         """
         self.result_text.config(state="normal")
-        self.result_text.delete(0, tk.END)
-        self.result_text.insert(0, text)
-        self.result_text.config(state="readonly")
+        self.result_text.delete('1.0', tk.END)
+        self.result_text.insert('1.0', text)
+        self.result_text.config(state="disabled")
         
     def _copy_result(self) -> None:
         """Copy the hash result to clipboard."""
-        result = self.result_text.get()
+        result = self.result_text.get('1.0', 'end-1c')
         if result:
             self.root.clipboard_clear()
             self.root.clipboard_append(result)
