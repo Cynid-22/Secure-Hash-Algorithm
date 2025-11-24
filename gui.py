@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Secure Hash Algorithm GUI
-A graphical interface for calculating SHA-256, SHA-384, and SHA-512 hashes.
-No compilation required - uses Python's built-in hashlib library.
+Hash Algorithm GUI
+A graphical interface for calculating SHA-256, SHA-384, SHA-512, and CRC-32 hashes.
+No compilation required - uses Python's built-in hashlib library and custom CRC implementation.
 """
 
 import tkinter as tk
@@ -16,6 +16,7 @@ class HashAlgorithm:
     SHA256 = "SHA-256"
     SHA384 = "SHA-384"
     SHA512 = "SHA-512"
+    CRC32 = "CRC-32"
     
     @classmethod
     def get_hash_function(cls, algorithm: str):
@@ -26,23 +27,27 @@ class HashAlgorithm:
             algorithm: The algorithm name (e.g., "SHA-256")
             
         Returns:
-            The corresponding hashlib function
+            The corresponding hashlib function or None for CRC-32
         """
         mapping = {
             cls.SHA256: hashlib.sha256,
             cls.SHA384: hashlib.sha384,
-            cls.SHA512: hashlib.sha512
+            cls.SHA512: hashlib.sha512,
+            cls.CRC32: None  # CRC-32 handled separately
         }
         return mapping.get(algorithm)
     
     @classmethod
     def all(cls) -> list:
         """Return all available algorithms."""
-        return [cls.SHA256, cls.SHA384, cls.SHA512]
+        return [cls.SHA256, cls.SHA384, cls.SHA512, cls.CRC32]
 
 
 class SecureHashGUI:
     """Main GUI application for secure hash calculation."""
+    
+    # CRC-32 lookup table (generated once at class level)
+    CRC32_TABLE = None
     
     def __init__(self, root: tk.Tk):
         """
@@ -55,6 +60,44 @@ class SecureHashGUI:
         self.binary_content: Optional[bytes] = None
         self._setup_window()
         self._create_widgets()
+        self._generate_crc32_table()
+        
+    @classmethod
+    def _generate_crc32_table(cls) -> None:
+        """Generate CRC-32 lookup table (IEEE 802.3 polynomial)."""
+        if cls.CRC32_TABLE is not None:
+            return
+            
+        cls.CRC32_TABLE = []
+        CRC32_POLYNOMIAL = 0xEDB88320
+        
+        for i in range(256):
+            crc = i
+            for _ in range(8):
+                if crc & 1:
+                    crc = (crc >> 1) ^ CRC32_POLYNOMIAL
+                else:
+                    crc >>= 1
+            cls.CRC32_TABLE.append(crc)
+    
+    def _calculate_crc32(self, data: bytes) -> str:
+        """
+        Calculate CRC-32 checksum.
+        
+        Args:
+            data: The input bytes
+            
+        Returns:
+            The CRC-32 checksum as hexadecimal string
+        """
+        crc = 0xFFFFFFFF
+        
+        for byte in data:
+            index = (crc ^ byte) & 0xFF
+            crc = (crc >> 8) ^ self.CRC32_TABLE[index]
+        
+        crc ^= 0xFFFFFFFF
+        return f"{crc:08x}"
         
     def _setup_window(self) -> None:
         """Configure the main window properties."""
@@ -187,10 +230,6 @@ class SecureHashGUI:
         """Calculate the hash using the selected algorithm."""
         algorithm = self.algorithm_var.get()
         hash_func = HashAlgorithm.get_hash_function(algorithm)
-        
-        if not hash_func:
-            messagebox.showerror("Error", f"Unknown algorithm: {algorithm}")
-            return
             
         try:
             # Get input data
@@ -203,9 +242,17 @@ class SecureHashGUI:
                 input_bytes = input_data.encode('utf-8')
             
             # Calculate hash
-            hash_obj = hash_func()
-            hash_obj.update(input_bytes)
-            hash_result = hash_obj.hexdigest()
+            if algorithm == HashAlgorithm.CRC32:
+                # Use custom CRC-32 implementation
+                hash_result = self._calculate_crc32(input_bytes)
+            elif hash_func:
+                # Use hashlib for SHA algorithms
+                hash_obj = hash_func()
+                hash_obj.update(input_bytes)
+                hash_result = hash_obj.hexdigest()
+            else:
+                messagebox.showerror("Error", f"Unknown algorithm: {algorithm}")
+                return
             
             # Display the result
             self._set_result(hash_result)
