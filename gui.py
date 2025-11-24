@@ -8,15 +8,73 @@ No compilation required - uses Python's built-in hashlib library and custom CRC 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import hashlib
-from typing import Optional
+import json
+import os
+from typing import Optional, Dict, List
 
 
 class HashAlgorithm:
-    """Enum-like class for hash algorithm types."""
-    SHA256 = "SHA-256"
-    SHA384 = "SHA-384"
-    SHA512 = "SHA-512"
-    CRC32 = "CRC-32"
+    """Dynamically loads hash algorithms from config file."""
+    
+    _algorithms: List[Dict] = []
+    _config_loaded = False
+    
+    @classmethod
+    def load_config(cls, config_path: str = "algorithms.json") -> None:
+        """
+        Load algorithms from the configuration file.
+        
+        Args:
+            config_path: Path to the algorithms configuration file
+        """
+        if cls._config_loaded:
+            return
+            
+        # Get the directory where this script is located
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        full_path = os.path.join(script_dir, config_path)
+        
+        try:
+            with open(full_path, 'r') as f:
+                config = json.load(f)
+                cls._algorithms = config.get('algorithms', [])
+                cls._config_loaded = True
+        except FileNotFoundError:
+            messagebox.showerror(
+                "Configuration Error",
+                f"Could not find {config_path}. Using default algorithms."
+            )
+            # Fallback to default algorithms
+            cls._algorithms = [
+                {"name": "SHA-256", "type": "hashlib", "hashlib_name": "sha256"},
+                {"name": "SHA-384", "type": "hashlib", "hashlib_name": "sha384"},
+                {"name": "SHA-512", "type": "hashlib", "hashlib_name": "sha512"}
+            ]
+            cls._config_loaded = True
+        except json.JSONDecodeError as e:
+            messagebox.showerror(
+                "Configuration Error",
+                f"Invalid JSON in {config_path}: {e}"
+            )
+            cls._algorithms = []
+            cls._config_loaded = True
+    
+    @classmethod
+    def get_algorithm_config(cls, name: str) -> Optional[Dict]:
+        """
+        Get the configuration for a specific algorithm.
+        
+        Args:
+            name: The algorithm name
+            
+        Returns:
+            The algorithm configuration dictionary or None
+        """
+        cls.load_config()
+        for algo in cls._algorithms:
+            if algo['name'] == name:
+                return algo
+        return None
     
     @classmethod
     def get_hash_function(cls, algorithm: str):
@@ -24,23 +82,24 @@ class HashAlgorithm:
         Get the hashlib function for the given algorithm.
         
         Args:
-            algorithm: The algorithm name (e.g., "SHA-256")
+            algorithm: The algorithm name
             
         Returns:
-            The corresponding hashlib function or None for CRC-32
+            The corresponding hashlib function or None for custom algorithms
         """
-        mapping = {
-            cls.SHA256: hashlib.sha256,
-            cls.SHA384: hashlib.sha384,
-            cls.SHA512: hashlib.sha512,
-            cls.CRC32: None  # CRC-32 handled separately
-        }
-        return mapping.get(algorithm)
+        cls.load_config()
+        config = cls.get_algorithm_config(algorithm)
+        
+        if config and config.get('type') == 'hashlib':
+            hashlib_name = config.get('hashlib_name')
+            return getattr(hashlib, hashlib_name, None)
+        return None
     
     @classmethod
-    def all(cls) -> list:
-        """Return all available algorithms."""
-        return [cls.SHA256, cls.SHA384, cls.SHA512, cls.CRC32]
+    def all(cls) -> List[str]:
+        """Return all available algorithm names."""
+        cls.load_config()
+        return [algo['name'] for algo in cls._algorithms]
 
 
 class SecureHashGUI:
@@ -105,6 +164,9 @@ class SecureHashGUI:
         self.root.geometry("550x450")
         self.root.resizable(False, False)
         
+        # Remove window icon (delayed to prevent tkinter from overriding)
+        self.root.after(200, self._remove_icon)
+        
         # Center the window on screen
         self.root.update_idletasks()
         width = self.root.winfo_width()
@@ -112,6 +174,22 @@ class SecureHashGUI:
         x = (self.root.winfo_screenwidth() // 2) - (width // 2)
         y = (self.root.winfo_screenheight() // 2) - (height // 2)
         self.root.geometry(f'{width}x{height}+{x}+{y}')
+    
+    
+    def _remove_icon(self) -> None:
+        """Remove the window icon by setting it to a transparent image."""
+        try:
+            # Create a transparent 1x1 pixel image
+            # This effectively makes the icon invisible
+            blank_icon = tk.PhotoImage(width=1, height=1)
+            blank_icon.blank()
+            self.root.iconphoto(True, blank_icon)
+        except Exception:
+            # If that fails, try the empty bitmap approach
+            try:
+                self.root.iconbitmap('')
+            except:
+                pass
         
     def _create_widgets(self) -> None:
         """Create and layout all GUI widgets."""
@@ -125,7 +203,11 @@ class SecureHashGUI:
         
         ttk.Label(algo_frame, text="Algorithm:").pack(side=tk.LEFT)
         
-        self.algorithm_var = tk.StringVar(value=HashAlgorithm.SHA256)
+        # Get default algorithm (first in the list, or empty string if none)
+        algorithms = HashAlgorithm.all()
+        default_algo = algorithms[0] if algorithms else ""
+        
+        self.algorithm_var = tk.StringVar(value=default_algo)
         self.algorithm_combo = ttk.Combobox(
             algo_frame,
             textvariable=self.algorithm_var,
@@ -229,7 +311,11 @@ class SecureHashGUI:
     def _calculate_hash(self) -> None:
         """Calculate the hash using the selected algorithm."""
         algorithm = self.algorithm_var.get()
-        hash_func = HashAlgorithm.get_hash_function(algorithm)
+        algo_config = HashAlgorithm.get_algorithm_config(algorithm)
+        
+        if not algo_config:
+            messagebox.showerror("Error", f"Unknown algorithm: {algorithm}")
+            return
             
         try:
             # Get input data
@@ -241,17 +327,29 @@ class SecureHashGUI:
                 input_data = self.input_text.get('1.0', tk.END).rstrip('\n')
                 input_bytes = input_data.encode('utf-8')
             
-            # Calculate hash
-            if algorithm == HashAlgorithm.CRC32:
-                # Use custom CRC-32 implementation
-                hash_result = self._calculate_crc32(input_bytes)
-            elif hash_func:
-                # Use hashlib for SHA algorithms
+            # Calculate hash based on algorithm type
+            algo_type = algo_config.get('type')
+            
+            if algo_type == 'hashlib':
+                # Use hashlib for standard algorithms
+                hash_func = HashAlgorithm.get_hash_function(algorithm)
+                if not hash_func:
+                    messagebox.showerror("Error", f"Failed to load algorithm: {algorithm}")
+                    return
                 hash_obj = hash_func()
                 hash_obj.update(input_bytes)
                 hash_result = hash_obj.hexdigest()
+                
+            elif algo_type == 'custom':
+                # Use custom implementation
+                method_name = algo_config.get('method')
+                if method_name == 'crc32':
+                    hash_result = self._calculate_crc32(input_bytes)
+                else:
+                    messagebox.showerror("Error", f"Unknown custom method: {method_name}")
+                    return
             else:
-                messagebox.showerror("Error", f"Unknown algorithm: {algorithm}")
+                messagebox.showerror("Error", f"Unknown algorithm type: {algo_type}")
                 return
             
             # Display the result

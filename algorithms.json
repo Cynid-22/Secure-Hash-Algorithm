@@ -1,0 +1,28 @@
+{
+  "algorithms": [
+    {
+      "name": "SHA-256",
+      "type": "hashlib",
+      "hashlib_name": "sha256",
+      "description": "SHA-256 (256-bit Secure Hash Algorithm)"
+    },
+    {
+      "name": "SHA-384",
+      "type": "hashlib",
+      "hashlib_name": "sha384",
+      "description": "SHA-384 (384-bit Secure Hash Algorithm)"
+    },
+    {
+      "name": "SHA-512",
+      "type": "hashlib",
+      "hashlib_name": "sha512",
+      "description": "SHA-512 (512-bit Secure Hash Algorithm)"
+    },
+    {
+      "name": "CRC-32",
+      "type": "custom",
+      "method": "crc32",
+      "description": "CRC-32 (32-bit Cyclic Redundancy Check)"
+    }
+  ]
+}
