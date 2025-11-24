@@ -104,8 +104,3 @@ This project is open source and available for educational purposes.
 ## Contributing
 
 Feel free to submit issues or pull requests to improve this tool!
-
----
-
-**Author**: Converted from C# to Python with modern refactoring  
-**Last Updated**: November 2025
