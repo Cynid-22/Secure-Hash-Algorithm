@@ -2,12 +2,12 @@
 """
 Hash Algorithm GUI
 A graphical interface for calculating SHA-256, SHA-384, SHA-512, and CRC-32 hashes.
-No compilation required - uses Python's built-in hashlib library and custom CRC implementation.
+Uses compiled C++ executables for hash calculations.
 """
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
-import hashlib
+import subprocess
 import json
 import os
 from typing import Optional, Dict, List
@@ -74,25 +74,6 @@ class HashAlgorithm:
         for algo in cls._algorithms:
             if algo['name'] == name:
                 return algo
-        return None
-    
-    @classmethod
-    def get_hash_function(cls, algorithm: str):
-        """
-        Get the hashlib function for the given algorithm.
-        
-        Args:
-            algorithm: The algorithm name
-            
-        Returns:
-            The corresponding hashlib function or None for custom algorithms
-        """
-        cls.load_config()
-        config = cls.get_algorithm_config(algorithm)
-        
-        if config and config.get('type') == 'hashlib':
-            hashlib_name = config.get('hashlib_name')
-            return getattr(hashlib, hashlib_name, None)
         return None
     
     @classmethod
@@ -169,9 +150,6 @@ class StatusIndicator(tk.Frame):
 class SecureHashGUI:
     """Main GUI application for secure hash calculation."""
     
-    # CRC-32 lookup table (generated once at class level)
-    CRC32_TABLE = None
-    
     def __init__(self, root: tk.Tk):
         """
         Initialize the Secure Hash GUI.
@@ -183,44 +161,8 @@ class SecureHashGUI:
         self.binary_content: Optional[bytes] = None
         self._setup_window()
         self._create_widgets()
-        self._generate_crc32_table()
         
-    @classmethod
-    def _generate_crc32_table(cls) -> None:
-        """Generate CRC-32 lookup table (IEEE 802.3 polynomial)."""
-        if cls.CRC32_TABLE is not None:
-            return
-            
-        cls.CRC32_TABLE = []
-        CRC32_POLYNOMIAL = 0xEDB88320
-        
-        for i in range(256):
-            crc = i
-            for _ in range(8):
-                if crc & 1:
-                    crc = (crc >> 1) ^ CRC32_POLYNOMIAL
-                else:
-                    crc >>= 1
-            cls.CRC32_TABLE.append(crc)
-    
-    def _calculate_crc32(self, data: bytes) -> str:
-        """
-        Calculate CRC-32 checksum.
-        
-        Args:
-            data: The input bytes
-            
-        Returns:
-            The CRC-32 checksum as hexadecimal string
-        """
-        crc = 0xFFFFFFFF
-        
-        for byte in data:
-            index = (crc ^ byte) & 0xFF
-            crc = (crc >> 8) ^ self.CRC32_TABLE[index]
-        
-        crc ^= 0xFFFFFFFF
-        return f"{crc:08x}"
+
         
     def _setup_window(self) -> None:
         """Configure the main window properties."""
@@ -402,27 +344,49 @@ class SecureHashGUI:
                 input_data = self.input_text.get('1.0', tk.END).rstrip('\n')
                 input_bytes = input_data.encode('utf-8')
             
-            # Calculate hash based on algorithm type
+            # Calculate hash using C++ executable
             algo_type = algo_config.get('type')
             
-            if algo_type == 'hashlib':
-                # Use hashlib for standard algorithms
-                hash_func = HashAlgorithm.get_hash_function(algorithm)
-                if not hash_func:
-                    messagebox.showerror("Error", f"Failed to load algorithm: {algorithm}")
+            if algo_type == 'executable':
+                # Get executable name
+                executable_name = algo_config.get('executable')
+                if not executable_name:
+                    messagebox.showerror("Error", f"No executable specified for {algorithm}")
                     self.status_indicator.set_complete()
                     return
-                hash_obj = hash_func()
-                hash_obj.update(input_bytes)
-                hash_result = hash_obj.hexdigest()
                 
-            elif algo_type == 'custom':
-                # Use custom implementation
-                method_name = algo_config.get('method')
-                if method_name == 'crc32':
-                    hash_result = self._calculate_crc32(input_bytes)
-                else:
-                    messagebox.showerror("Error", f"Unknown custom method: {method_name}")
+                # Get the directory where this script is located
+                script_dir = os.path.dirname(os.path.abspath(__file__))
+                executable_path = os.path.join(script_dir, executable_name)
+                
+                # Check if executable exists
+                if not os.path.exists(executable_path):
+                    messagebox.showerror(
+                        "Error", 
+                        f"Executable not found: {executable_name}\\n\\n"
+                        f"Please compile the C++ files first.\\n"
+                        f"Example: g++ -o {executable_name} {executable_name.replace('.exe', '.cpp')}"
+                    )
+                    self.status_indicator.set_complete()
+                    return
+                
+                # Run the executable with input data via stdin
+                try:
+                    result = subprocess.run(
+                        [executable_path],
+                        input=input_bytes,
+                        capture_output=True,
+                        check=True,
+                        timeout=5
+                    )
+                    # Get hash from stdout and strip whitespace
+                    hash_result = result.stdout.decode('utf-8').strip()
+                except subprocess.TimeoutExpired:
+                    messagebox.showerror("Error", f"Hash calculation timed out")
+                    self.status_indicator.set_complete()
+                    return
+                except subprocess.CalledProcessError as e:
+                    messagebox.showerror("Error", f"Hash calculation failed: {e}")
                     self.status_indicator.set_complete()
                     return
             else:
