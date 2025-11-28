@@ -9,11 +9,12 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import threading
 import multiprocessing
+import os
 from typing import Optional
 
 # Import from new modules
 from config import HashAlgorithm
-from components import StatusIndicator
+from components import StatusIndicator, ToolTip
 from hasher import HashCalculator
 
 
@@ -28,7 +29,7 @@ class SecureHashGUI:
             root: The root tkinter window
         """
         self.root = root
-        self.selected_file_path: Optional[str] = None
+        self.selected_file_paths: list[str] = []
         self._calculation_thread: Optional[threading.Thread] = None
         self._cancel_flag = False
         
@@ -47,7 +48,7 @@ class SecureHashGUI:
     def _setup_window(self) -> None:
         """Configure the main window properties."""
         self.root.title("Secure Hash Algorithm GUI")
-        self.root.geometry("750x450")
+        self.root.geometry("750x500")  # Increased height for listbox
         self.root.resizable(False, False)
         
         # Center the window on screen
@@ -107,27 +108,46 @@ class SecureHashGUI:
         self.text_label = ttk.Label(self.input_container, text="Input:")
         self.input_text = scrolledtext.ScrolledText(
             self.input_container,
-            height=6,
+            height=8,
             width=200,
             wrap=tk.WORD
         )
         self.input_text.bind('<Key>', self._on_input_change)
         
         # File mode widgets
-        self.file_label = ttk.Label(self.input_container, text="File:")
+        self.file_label = ttk.Label(self.input_container, text="Files:")
+        
         self.file_frame = ttk.Frame(self.input_container)
-        self.file_path_var = tk.StringVar(value="No file selected")
-        self.file_path_label = ttk.Label(
-            self.file_frame,
-            textvariable=self.file_path_var,
-            relief=tk.SUNKEN,
-            anchor=tk.W
+        
+        # Listbox with scrollbar
+        self.file_list_frame = ttk.Frame(self.file_frame)
+        self.file_list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        
+        self.file_scrollbar = ttk.Scrollbar(self.file_list_frame)
+        self.file_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.file_listbox = tk.Listbox(
+            self.file_list_frame, 
+            selectmode=tk.EXTENDED,
+            yscrollcommand=self.file_scrollbar.set,
+            height=8,
+            activestyle='dotbox'
         )
-        self.browse_button = ttk.Button(
-            self.file_frame,
-            text="Browse...",
-            command=self._browse_file
-        )
+        self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.file_scrollbar.config(command=self.file_listbox.yview)
+        self.file_listbox.bind('<<ListboxSelect>>', self._on_file_select)
+        
+        # Buttons frame
+        self.file_btn_frame = ttk.Frame(self.file_frame)
+        self.file_btn_frame.pack(side=tk.LEFT, fill=tk.Y, padx=(5, 0))
+        
+        self.add_file_btn = ttk.Button(self.file_btn_frame, text="+", width=3, command=self._add_files)
+        self.add_file_btn.pack(side=tk.TOP, pady=(0, 5))
+        ToolTip(self.add_file_btn, "Add file(s)")
+        
+        self.remove_file_btn = ttk.Button(self.file_btn_frame, text="-", width=3, command=self._remove_files, state="disabled")
+        self.remove_file_btn.pack(side=tk.TOP)
+        ToolTip(self.remove_file_btn, "Remove selected file(s)")
         
         # Action buttons frame
         button_frame = ttk.Frame(self.root)
@@ -159,7 +179,7 @@ class SecureHashGUI:
         
         self.result_text = scrolledtext.ScrolledText(
             result_frame,
-            height=4,
+            height=6,
             state="disabled",
             font=("Courier", 9)
         )
@@ -190,13 +210,10 @@ class SecureHashGUI:
             # Show text input widgets
             self.text_label.pack(anchor=tk.W, pady=(0, 5))
             self.input_text.pack(fill=tk.BOTH, expand=True)
-            self.selected_file_path = None
         else:  # File mode
             # Show file input widgets
             self.file_label.pack(anchor=tk.W, pady=(0, 5))
-            self.file_frame.pack(fill=tk.X)
-            self.file_path_label.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
-            self.browse_button.pack(side=tk.LEFT)
+            self.file_frame.pack(fill=tk.BOTH, expand=True)
             # Show calculate button in file mode
             self.calculate_button.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -208,38 +225,68 @@ class SecureHashGUI:
         """Handle input change event."""
         # Show input changed status
         self.status_indicator.set_input_changed()
-        # Schedule hash calculation
-        self.root.after_idle(self._calculate_hash)
+        # Schedule hash calculation (only for text mode auto-calc)
+        if self.mode_var.get() == "Text":
+            self.root.after_idle(self._calculate_hash)
         
-    def _browse_file(self) -> None:
-        """Open file dialog and store file path for later hashing."""
-        file_path = filedialog.askopenfilename(
-            title="Select a file",
+    def _add_files(self) -> None:
+        """Open file dialog and add selected files."""
+        file_paths = filedialog.askopenfilenames(
+            title="Select files",
             filetypes=[("All files", "*.*")]
         )
         
-        if file_path:
-            # Store file path without reading the file yet
-            self.selected_file_path = file_path
-            self.file_path_var.set(file_path)
+        if file_paths:
+            for path in file_paths:
+                if path not in self.selected_file_paths:
+                    self.selected_file_paths.append(path)
+                    self.file_listbox.insert(tk.END, os.path.basename(path))
+            
             # Show input changed status
             self.status_indicator.set_input_changed()
+            
+    def _remove_files(self) -> None:
+        """Remove selected files from the list."""
+        selection = self.file_listbox.curselection()
+        if not selection:
+            return
+            
+        # Remove in reverse order to maintain indices
+        for index in reversed(selection):
+            self.file_listbox.delete(index)
+            del self.selected_file_paths[index]
+            
+        self._on_file_select()
+        self.status_indicator.set_input_changed()
+        
+    def _on_file_select(self, event=None) -> None:
+        """Handle file selection change."""
+        if self.file_listbox.curselection():
+            self.remove_file_btn.config(state="normal")
+        else:
+            self.remove_file_btn.config(state="disabled")
                 
     def _calculate_hash(self, event=None) -> None:
         """Calculate the hash using the selected algorithm."""
         algorithm = self.algorithm_var.get()
         
         # For file mode, use threading; for text mode, run synchronously
-        if self.selected_file_path is not None:
+        if self.mode_var.get() == "File":
+            if not self.selected_file_paths:
+                messagebox.showwarning("Warning", "No files selected!")
+                return
+                
             # File mode - use background thread
             if self._calculation_thread and self._calculation_thread.is_alive():
                 return  # Already calculating
             
             self._cancel_flag = False
             self.status_indicator.set_calculating(0)
+            self._set_result("") # Clear previous results
             
             # Define callbacks for the thread
             def progress_cb(p):
+                # We'll update this to show overall progress or current file progress
                 self.root.after(0, self.status_indicator.set_calculating, p)
                 
             def check_cancel_cb():
@@ -247,16 +294,46 @@ class SecureHashGUI:
                 
             def error_cb(msg):
                 self.root.after(0, lambda: messagebox.showerror("Error", msg))
-                self.root.after(0, self.status_indicator.set_complete)
                 
             def success_cb(res):
-                self.root.after(0, self._set_result, res)
-                self.root.after(0, self.status_indicator.set_complete)
+                # This is called per file, we need to append result
+                pass 
             
+            # Wrapper to process all files
+            def process_files():
+                total_files = len(self.selected_file_paths)
+                
+                for i, file_path in enumerate(self.selected_file_paths):
+                    if self._cancel_flag:
+                        break
+                        
+                    filename = os.path.basename(file_path)
+                    
+                    # Update status
+                    self.root.after(0, lambda f=filename, idx=i: self.status_indicator.label.config(
+                        text=f"Processing {idx+1}/{total_files}: {f}..."
+                    ))
+                    
+                    # Local success callback to append result
+                    def file_success_cb(hash_val):
+                        result_line = f"{file_path}:\n{hash_val}\n\n"
+                        self.root.after(0, self._append_result, result_line)
+                    
+                    # Calculate hash for this file
+                    self.hasher.calculate_file(
+                        algorithm, 
+                        file_path, 
+                        progress_cb, 
+                        check_cancel_cb, 
+                        error_cb, 
+                        file_success_cb
+                    )
+                
+                self.root.after(0, self.status_indicator.set_complete)
+
             # Start thread
             self._calculation_thread = threading.Thread(
-                target=self.hasher.calculate_file,
-                args=(algorithm, self.selected_file_path, progress_cb, check_cancel_cb, error_cb, success_cb),
+                target=process_files,
                 daemon=True
             )
             self._calculation_thread.start()
@@ -296,6 +373,13 @@ class SecureHashGUI:
         self.result_text.insert('1.0', text)
         self.result_text.config(state="disabled")
         
+    def _append_result(self, text: str) -> None:
+        """Append text to the result text box."""
+        self.result_text.config(state="normal")
+        self.result_text.insert(tk.END, text)
+        self.result_text.see(tk.END)
+        self.result_text.config(state="disabled")
+        
     def _copy_result(self) -> None:
         """Copy the hash result to clipboard."""
         result = self.result_text.get('1.0', 'end-1c')
@@ -313,10 +397,11 @@ class SecureHashGUI:
         if mode == "Text":
             self.input_text.delete('1.0', tk.END)
         else:  # File mode
-            self.file_path_var.set("No file selected")
+            self.selected_file_paths = []
+            self.file_listbox.delete(0, tk.END)
+            self.remove_file_btn.config(state="disabled")
         
         self._set_result('')
-        self.selected_file_path = None
         self.status_indicator.set_input_changed()
             
     def run(self) -> None:
