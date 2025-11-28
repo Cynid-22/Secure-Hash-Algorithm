@@ -42,7 +42,7 @@ Tested on a **5 GB .dat file** with SHA-256, this application significantly outp
    cd Hashing-Algorithm
    ```
 
-2. (Optional) Build the C++ executables:
+2. Build the C++ executables:
    Double-click `build.bat` or run it from the command line:
    ```cmd
    build.bat
