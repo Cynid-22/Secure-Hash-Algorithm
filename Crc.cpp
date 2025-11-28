@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <sstream>
 #include <cstdint>
+#include "common.h"
 
 using namespace std;
 
@@ -61,8 +62,8 @@ void crc32(const string& strMessage)
 
 int main()
 {
-    // Read entire input from stdin
-    string input((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+    initBinaryMode();
+    string input = readStdinToString();
     crc32(input);
     cout << endl;
     return 0;

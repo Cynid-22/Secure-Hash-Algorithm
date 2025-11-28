@@ -4,6 +4,7 @@
 #include <sstream>
 #include <bits/stdc++.h>
 #include "sha.h"
+#include "common.h"
 
 using namespace std;
 
@@ -110,8 +111,6 @@ void sha256(string strMessage)
     size_t messageBitLength = 0;
     bitset<256> digest;
 
-    
-
     binMessage = TextToBinaryString(strMessage, messageBitLength);
     preProcessing(messageBitLength, binMessage);
     hash = processing(binMessage, H, K);
@@ -125,8 +124,8 @@ void sha256(string strMessage)
 
 int main()
 {
-    // Read entire input from stdin
-    string input((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+    initBinaryMode();
+    string input = readStdinToString();
     sha256(input);
     cout << endl;
     return 0;

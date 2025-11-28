@@ -4,6 +4,7 @@
 #include <sstream>
 #include <bits/stdc++.h>
 #include "sha.h"
+#include "common.h"
 
 using namespace std;
 
@@ -147,8 +148,8 @@ void sha512(string strMessage)
 
 int main()
 {
-    // Read entire input from stdin
-    string input((istreambuf_iterator<char>(cin)), istreambuf_iterator<char>());
+    initBinaryMode();
+    string input = readStdinToString();
     sha512(input);
     cout << endl;
     return 0;
