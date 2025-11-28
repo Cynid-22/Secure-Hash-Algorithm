@@ -14,6 +14,7 @@ import threading
 import multiprocessing
 import re
 import queue
+import hashlib
 from typing import Optional, Dict, List
 
 
@@ -467,131 +468,103 @@ class SecureHashGUI:
             self.status_indicator.set_complete()
     
     def _calculate_hash_threaded(self) -> None:
-        """Calculate hash in background thread with progress monitoring."""
+        """Calculate hash in background thread using fast hashlib implementation."""
         algorithm = self.algorithm_var.get()
-        algo_config = HashAlgorithm.get_algorithm_config(algorithm)
         
-        if not algo_config or algo_config.get('type') != 'executable':
-            self.root.after(0, lambda: messagebox.showerror("Error", "Invalid algorithm configuration"))
-            self.root.after(0, self.status_indicator.set_complete)
-            return
+        # Map algorithm names to hashlib functions
+        hashlib_map = {
+            'SHA-256': hashlib.sha256,
+            'SHA-384': hashlib.sha384,
+            'SHA-512': hashlib.sha512
+        }
         
-        executable_name = algo_config.get('executable')
-        if not executable_name:
-            self.root.after(0, lambda: messagebox.showerror("Error", "No executable specified"))
-            self.root.after(0, self.status_indicator.set_complete)
-            return
-        
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        executable_path = os.path.join(script_dir, executable_name)
-        
-        if not os.path.exists(executable_path):
-            self.root.after(0,  lambda: messagebox.showerror("Error", f"Executable not found: {executable_name}"))
-            self.root.after(0, self.status_indicator.set_complete)
-            return
-        
-        try:
-            # Get file size for progress tracking
-            file_size = os.path.getsize(self.selected_file_path)
-            
-            if self._cancel_flag:
-                return
-            
-            # Launch C++ process
-            proc = subprocess.Popen(
-                [executable_path],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0
-            )
-            
-            self._current_process = proc
+        # Check if we have a fast Python implementation
+        if algorithm in hashlib_map:
+            # Use fast hashlib (compiled C implementation)
+            hash_func = hashlib_map[algorithm]()
             
             try:
-                # Stream file in chunks to minimize memory usage
-                CHUNK_SIZE = 8 * 1024 * 1024  # 8MB chunks
-                bytes_sent = 0
+                file_size = os.path.getsize(self.selected_file_path)
+                CHUNK_SIZE = 16 * 1024 * 1024  # 16MB chunks
+                bytes_processed = 0
                 last_progress = 0
                 
-                # Thread to read stderr for progress
-                import queue
-                progress_queue = queue.Queue()
-                
-                def read_stderr():
-                    progress_pattern = re.compile(r'PROGRESS:(\d+)')
-                    while True:
-                        line = proc.stderr.readline()
-                        if not line:
-                            break
-                        line_str = line.decode('utf-8', errors='ignore').strip()
-                        match = progress_pattern.match(line_str)
-                        if match:
-                            progress_queue.put(int(match.group(1)))
-                
-                stderr_thread = threading.Thread(target=read_stderr, daemon=True)
-                stderr_thread.start()
-                
-                # Stream file to stdin in chunks
                 with open(self.selected_file_path, 'rb') as f:
                     while True:
                         if self._cancel_flag:
-                            proc.terminate()
-                            proc.wait()
                             return
                         
-                        # Read chunk
                         chunk = f.read(CHUNK_SIZE)
                         if not chunk:
                             break
                         
-                        # Send chunk to subprocess
-                        proc.stdin.write(chunk)
-                        proc.stdin.flush()
+                        # Hash the chunk (FAST!)
+                        hash_func.update(chunk)
                         
-                        # Update progress based on bytes sent
-                        bytes_sent += len(chunk)
-                        current_progress = int((bytes_sent / file_size) * 100)
+                        # Update progress
+                        bytes_processed += len(chunk)
+                        current_progress = int((bytes_processed / file_size) * 100)
                         
                         if current_progress >= last_progress + 5:
                             self.root.after(0, self._update_progress, current_progress)
                             last_progress = current_progress
-                        
-                        # Chunk is freed from memory here when it goes out of scope
                 
-                # Close stdin to signal EOF
-                proc.stdin.close()
+                # Get final hash
+                hash_result = hash_func.hexdigest()
                 
-                # Check progress queue for C++ reported progress
-                while not progress_queue.empty():
-                    cpp_progress = progress_queue.get()
-                    self.root.after(0, self._update_progress, cpp_progress)
-                
-                # Wait for process to complete
-                stdout, _ = proc.communicate()
-                
-                if proc.returncode != 0:
-                    self.root.after(0, lambda: messagebox.showerror("Error", "Hash calculation failed"))
-                    self.root.after(0, self.status_indicator.set_complete)
-                    return
-                
-                # Get hash result from stdout
-                hash_result = stdout.decode('utf-8').strip()
-                
-                # Update GUI from main thread
+                # Update GUI
                 self.root.after(0, self._set_result, hash_result)
                 self.root.after(0, self.status_indicator.set_complete)
                 
-            finally:
-                # Cleanup process
-                if proc.poll() is None:
-                    proc.terminate()
-                    proc.wait()
-                self._current_process = None
+            except Exception as ex:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Error: {ex}"))
+                self.root.after(0, self.status_indicator.set_complete)
+        
+        elif algorithm == 'CRC-32':
+            # Use Python's zlib.crc32 (also fast compiled C)
+            import zlib
+            
+            try:
+                file_size = os.path.getsize(self.selected_file_path)
+                CHUNK_SIZE = 16 * 1024 * 1024
+                bytes_processed = 0
+                last_progress = 0
+                crc = 0
                 
-        except Exception as ex:
-            self.root.after(0, lambda: messagebox.showerror("Error", f"Error: {ex}"))
-            self.root.after(0, self.status_indicator.set_complete)
+                with open(self.selected_file_path, 'rb') as f:
+                    while True:
+                        if self._cancel_flag:
+                            return
+                        
+                        chunk = f.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        
+                        # Update CRC (FAST!)
+                        crc = zlib.crc32(chunk, crc)
+                        
+                        # Update progress
+                        bytes_processed += len(chunk)
+                        current_progress = int((bytes_processed / file_size) * 100)
+                        
+                        if current_progress >= last_progress + 5:
+                            self.root.after(0, self._update_progress, current_progress)
+                            last_progress = current_progress
+                
+                # Get final CRC (convert to unsigned 32-bit and format as hex)
+                hash_result = format(crc & 0xFFFFFFFF, '08x')
+                
+                # Update GUI
+                self.root.after(0, self._set_result, hash_result)
+                self.root.after(0, self.status_indicator.set_complete)
+                
+            except Exception as ex:
+                self.root.after(0, lambda: messagebox.showerror("Error", f"Error: {ex}"))
+                self.root.after(0, self.status_indicator.set_complete)
+        
+        else:
+            # Fallback to C++ subprocess for custom algorithms
+            self._calculate_hash_threaded_subprocess()
     
     def _update_progress(self, percentage: int) -> None:
         """Update progress indicator from main thread."""
