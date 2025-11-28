@@ -12,7 +12,8 @@ import json
 import os
 import threading
 import multiprocessing
-import  re
+import re
+import queue
 from typing import Optional, Dict, List
 
 
@@ -490,9 +491,8 @@ class SecureHashGUI:
             return
         
         try:
-            # Read file
-            with open(self.selected_file_path, 'rb') as f:
-                file_data = f.read()
+            # Get file size for progress tracking
+            file_size = os.path.getsize(self.selected_file_path)
             
             if self._cancel_flag:
                 return
@@ -509,32 +509,63 @@ class SecureHashGUI:
             self._current_process = proc
             
             try:
-                # Write file data to stdin and close it
-                proc.stdin.write(file_data)
+                # Stream file in chunks to minimize memory usage
+                CHUNK_SIZE = 8 * 1024 * 1024  # 8MB chunks
+                bytes_sent = 0
+                last_progress = 0
+                
+                # Thread to read stderr for progress
+                import queue
+                progress_queue = queue.Queue()
+                
+                def read_stderr():
+                    progress_pattern = re.compile(r'PROGRESS:(\d+)')
+                    while True:
+                        line = proc.stderr.readline()
+                        if not line:
+                            break
+                        line_str = line.decode('utf-8', errors='ignore').strip()
+                        match = progress_pattern.match(line_str)
+                        if match:
+                            progress_queue.put(int(match.group(1)))
+                
+                stderr_thread = threading.Thread(target=read_stderr, daemon=True)
+                stderr_thread.start()
+                
+                # Stream file to stdin in chunks
+                with open(self.selected_file_path, 'rb') as f:
+                    while True:
+                        if self._cancel_flag:
+                            proc.terminate()
+                            proc.wait()
+                            return
+                        
+                        # Read chunk
+                        chunk = f.read(CHUNK_SIZE)
+                        if not chunk:
+                            break
+                        
+                        # Send chunk to subprocess
+                        proc.stdin.write(chunk)
+                        proc.stdin.flush()
+                        
+                        # Update progress based on bytes sent
+                        bytes_sent += len(chunk)
+                        current_progress = int((bytes_sent / file_size) * 100)
+                        
+                        if current_progress >= last_progress + 5:
+                            self.root.after(0, self._update_progress, current_progress)
+                            last_progress = current_progress
+                        
+                        # Chunk is freed from memory here when it goes out of scope
+                
+                # Close stdin to signal EOF
                 proc.stdin.close()
                 
-                # Monitor stderr for progress
-                progress_pattern = re.compile(r'PROGRESS:(\d+)')
-                stderr_lines = []
-                
-                while True:
-                    if self._cancel_flag:
-                        proc.terminate()
-                        proc.wait()
-                        return
-                    
-                    line = proc.stderr.readline()
-                    if not line:
-                        break
-                    
-                    line_str = line.decode('utf-8', errors='ignore').strip()
-                    stderr_lines.append(line_str)
-                    
-                    # Check for progress updates
-                    match = progress_pattern.match(line_str)
-                    if match:
-                        progress = int(match.group(1))
-                        self.root.after(0, self._update_progress, progress)
+                # Check progress queue for C++ reported progress
+                while not progress_queue.empty():
+                    cpp_progress = progress_queue.get()
+                    self.root.after(0, self._update_progress, cpp_progress)
                 
                 # Wait for process to complete
                 stdout, _ = proc.communicate()
