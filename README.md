@@ -7,7 +7,7 @@ A modern, high-performance graphical user interface for calculating cryptographi
 - **Supported Algorithms**: SHA-256, SHA-384, SHA-512, and CRC-32.
 - **Input Modes**: 
   - **Text**: Instant hashing of typed text.
-  - **File**: Secure hashing of files of any size.
+  - **File**: Secure hashing of files (or files within an entire folder) of any size.
 - **High Performance**: 
   - Uses optimized native libraries (`hashlib`, `zlib`) for maximum speed.
   - Hashes large files (e.g., 5GB+) in seconds.
