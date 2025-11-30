@@ -4,7 +4,7 @@ A modern, high-performance graphical user interface for calculating cryptographi
 
 ## Features
 
-- **Supported Algorithms**: SHA-256, SHA-384, SHA-512, and CRC-32.
+- **Supported Algorithms**: MD5, SHA-1, SHA-256, SHA-384, SHA-512, and CRC-32.
 - **Input Modes**: 
   - **Text**: Instant hashing of typed text.
   - **File**: Secure hashing of files (or files within an entire folder) of any size.
@@ -66,7 +66,7 @@ Tested on a **5 GB .dat file** with SHA-256, this application significantly outp
 
 - `gui.py`: Main Python application entry point.
 - `common.h`: Shared C++ utilities for binary mode and progress reporting.
-- `Sha256.cpp`, `Sha384.cpp`, `Sha512.cpp`, `Crc.cpp`: C++ implementations of the algorithms.
+- `Sha1.cpp`, `Sha256.cpp`, `Md5.cpp`: C++ implementations of the algorithms.
 - `build.bat`: Script to compile the C++ code.
 
 ## License
