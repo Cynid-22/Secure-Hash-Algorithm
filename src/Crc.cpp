@@ -58,6 +58,7 @@ void crc32(const string& strMessage)
     uint32_t crc = calculateCRC32(strMessage, crcTable);
     
     cout << crc32ToHex(crc);
+    cout.flush();  // Ensure output is flushed immediately
 }
 
 int main()

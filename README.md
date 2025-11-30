@@ -19,18 +19,6 @@ A modern, high-performance graphical user interface for calculating cryptographi
   - Drag-and-drop support for files.
   - Copy results to clipboard with one click.
 
-## Performance Comparison
-
-Tested on a **5 GB .dat file** with SHA-256, this application significantly outperforms common alternatives:
-
-| Tool | Time Taken |
-|------|------------|
-| **This Application** | **8 seconds** |
-| Windows PowerShell | 24 seconds |
-| HashMyFiles | 78 seconds |
-
-*Results may vary based on hardware, but this tool consistently delivers maximum throughput.*
-
 ## Requirements
 
 - **Python 3.x** (with Tkinter)
@@ -87,26 +75,6 @@ Tested on a **5 GB .dat file** with SHA-256, this application significantly outp
 
 4. **Copy results:**
    - Click the **Copy** button to copy all hash results to clipboard.
-
-## Project Structure
-
-```
-Hashing-Algorithm/
-├── src/                    # C++ source code
-│   ├── Sha256.cpp, Sha384.cpp, Sha512.cpp
-│   ├── Sha1.cpp, Md5.cpp, Crc.cpp
-│   ├── common.h           # Shared utilities
-│   └── sha.h              # SHA helper functions
-├── app/                    # Python application
-│   ├── gui.py             # Main GUI application
-│   ├── hasher.py          # Hash calculation logic
-│   ├── config.py          # Configuration management
-│   ├── components.py      # UI components
-│   └── algorithms.json    # Algorithm definitions
-├── bin/                    # Compiled executables (created by build.bat)
-├── build.bat              # Build script for C++ code
-└── README.md
-```
 
 ## Troubleshooting
 

@@ -22,13 +22,24 @@ void sha1(const string& message) {
 
     // Pre-processing: Padding
     uint64_t originalLengthBits = message.length() * 8;
-    vector<uint8_t> paddedMessage(message.begin(), message.end());
-
-    paddedMessage.push_back(0x80); // Append '1' bit
-
-    while ((paddedMessage.size() * 8) % 512 != 448) {
-        paddedMessage.push_back(0x00);
-    }
+    
+    // Calculate padding size
+    size_t messageLen = message.length();
+    size_t paddingLen = (messageLen % 64 < 56) ? (56 - messageLen % 64) : (120 - messageLen % 64);
+    size_t totalLen = messageLen + paddingLen + 8;
+    
+    // Reserve space to avoid reallocations
+    vector<uint8_t> paddedMessage;
+    paddedMessage.reserve(totalLen);
+    
+    // Copy message
+    paddedMessage.insert(paddedMessage.end(), message.begin(), message.end());
+    
+    // Append '1' bit
+    paddedMessage.push_back(0x80);
+    
+    // Append zeros
+    paddedMessage.insert(paddedMessage.end(), paddingLen - 1, 0x00);
 
     // Append length (64 bits, big-endian)
     for (int i = 7; i >= 0; --i) {
@@ -95,6 +106,7 @@ void sha1(const string& message) {
     for (int i = 0; i < 5; ++i) {
         cout << hex << setfill('0') << setw(8) << result[i];
     }
+    cout.flush();  // Ensure output is flushed immediately
 }
 
 int main() {

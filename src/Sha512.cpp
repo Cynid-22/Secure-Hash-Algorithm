@@ -143,7 +143,9 @@ void sha512(string strMessage)
         digest[i] = hash[i];
     }
 
-    cout << bitsetToHex<bitset<512>>(digest, 512) << endl;
+    cout << bitsetToHex<bitset<512>>(digest, 512);
+    cout.flush();  // CRITICAL FIX: Flush output buffer immediately
+    cout << endl;
 }
 
 int main()

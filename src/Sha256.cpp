@@ -120,6 +120,7 @@ void sha256(string strMessage)
     }
 
     cout << bitsetToHex<bitset<256>>(digest, 256);
+    cout.flush();  // CRITICAL FIX: Flush output buffer immediately
 }
 
 int main()

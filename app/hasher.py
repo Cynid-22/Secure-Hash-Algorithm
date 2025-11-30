@@ -4,6 +4,7 @@ Handles both synchronous (text) and asynchronous (file) hash calculations.
 """
 
 import os
+import sys
 import subprocess
 import hashlib
 import threading
@@ -17,8 +18,23 @@ from config import HashAlgorithm
 class HashCalculator:
     """Handles hash calculations."""
     
+    _subprocess_warmed_up = False  # Class variable to track warmup
+    
     def __init__(self):
         self._current_process: Optional[subprocess.Popen] = None
+        # Warm up subprocess system on first instantiation
+        if not HashCalculator._subprocess_warmed_up:
+            self._warmup_subprocess()
+            HashCalculator._subprocess_warmed_up = True
+    
+    def _warmup_subprocess(self):
+        """Warm up the subprocess system to prevent first-call delays."""
+        try:
+            # Run a simple command to initialize subprocess machinery
+            subprocess.run(['cmd', '/c', 'echo'], capture_output=True, timeout=1, 
+                         creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0)
+        except:
+            pass  # Ignore any errors during warmup
     
     def calculate_text_sync(self, algorithms: list[str], text: str) -> dict[str, str]:
         """
@@ -48,8 +64,14 @@ class HashCalculator:
                     results[algo] = "Error: No executable specified"
                     continue
                 
-                script_dir = os.path.dirname(os.path.abspath(__file__))
-                executable_path = os.path.join(script_dir, '..', 'bin', executable_name)
+                # Get base path (works for both dev and PyInstaller)
+                if getattr(sys, 'frozen', False):
+                    base_path = sys._MEIPASS
+                else:
+                    base_path = os.path.dirname(os.path.abspath(__file__))
+                    base_path = os.path.join(base_path, '..')
+                
+                executable_path = os.path.join(base_path, 'bin', executable_name)
                 
                 if not os.path.exists(executable_path):
                     results[algo] = "Error: Executable not found"
@@ -61,9 +83,12 @@ class HashCalculator:
                         input=input_bytes,
                         capture_output=True,
                         check=True,
-                        timeout=5
+                        timeout=30,  # Increased from 5 to 30 seconds
+                        creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, 'CREATE_NO_WINDOW') else 0
                     )
                     results[algo] = result.stdout.decode('utf-8').strip()
+                except subprocess.TimeoutExpired as e:
+                    results[algo] = f"Error: Timeout after 30s (stderr: {e.stderr.decode('utf-8', errors='ignore') if e.stderr else 'none'})"
                 except Exception as e:
                     results[algo] = f"Error: {str(e)}"
             elif algo_type == 'hashlib':
@@ -202,8 +227,14 @@ class HashCalculator:
         if not executable_name:
             raise ValueError("No executable specified")
         
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        executable_path = os.path.join(script_dir, '..', 'bin', executable_name)
+        # Get base path (works for both dev and PyInstaller)
+        if getattr(sys, 'frozen', False):
+            base_path = sys._MEIPASS
+        else:
+            base_path = os.path.dirname(os.path.abspath(__file__))
+            base_path = os.path.join(base_path, '..')
+        
+        executable_path = os.path.join(base_path, 'bin', executable_name)
         
         if not os.path.exists(executable_path):
             raise FileNotFoundError(f"Executable not found: {executable_name}")

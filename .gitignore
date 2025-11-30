@@ -1,6 +1,9 @@
 # Compiled executables
 *.exe
 bin/
+build/
+dist/
+*.spec
 
 # Python
 __pycache__/

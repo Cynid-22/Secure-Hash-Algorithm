@@ -4,6 +4,7 @@ Configuration module for Hash Algorithm GUI.
 
 import json
 import os
+import sys
 from typing import List, Dict, Optional
 from tkinter import messagebox
 
@@ -24,9 +25,15 @@ class HashAlgorithm:
         if cls._config_loaded:
             return
             
-        # Get the directory where this script is located
-        script_dir = os.path.dirname(os.path.abspath(__file__))
-        full_path = os.path.join(script_dir, config_path)
+        # Get the base path (works for both dev and PyInstaller)
+        if getattr(sys, 'frozen', False):
+            # Running as compiled executable - PyInstaller extracts to _MEIPASS
+            base_path = os.path.join(sys._MEIPASS, 'app')
+        else:
+            # Running in normal Python environment - we're already in app/
+            base_path = os.path.dirname(os.path.abspath(__file__))
+        
+        full_path = os.path.join(base_path, config_path)
         
         try:
             with open(full_path, 'r') as f:

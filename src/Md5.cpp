@@ -56,13 +56,24 @@ void md5(const string& message) {
 
     // Pre-processing: Padding
     uint64_t originalLengthBits = message.length() * 8;
-    vector<uint8_t> paddedMessage(message.begin(), message.end());
-
-    paddedMessage.push_back(0x80); // Append '1' bit (0x80 byte)
-
-    while ((paddedMessage.size() * 8) % 512 != 448) {
-        paddedMessage.push_back(0x00);
-    }
+    
+    // Calculate padding size
+    size_t messageLen = message.length();
+    size_t paddingLen = (messageLen % 64 < 56) ? (56 - messageLen % 64) : (120 - messageLen % 64);
+    size_t totalLen = messageLen + paddingLen + 8;
+    
+    // Reserve space to avoid reallocations
+    vector<uint8_t> paddedMessage;
+    paddedMessage.reserve(totalLen);
+    
+    // Copy message
+    paddedMessage.insert(paddedMessage.end(), message.begin(), message.end());
+    
+    // Append '1' bit (0x80 byte)
+    paddedMessage.push_back(0x80);
+    
+    // Append zeros
+    paddedMessage.insert(paddedMessage.end(), paddingLen - 1, 0x00);
 
     // Append length (64 bits, little-endian)
     for (int i = 0; i < 8; ++i) {
@@ -122,6 +133,7 @@ void md5(const string& message) {
             cout << hex << setfill('0') << setw(2) << (int)bytes[j];
         }
     }
+    cout.flush();  // Ensure output is flushed immediately
 }
 
 int main() {

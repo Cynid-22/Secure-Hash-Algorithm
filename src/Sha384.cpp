@@ -143,7 +143,9 @@ void sha384(string strMessage)
         digest[i] = hash[i];
     }
 
-    cout << bitsetToHex<bitset<384>>(digest, 384) << endl;
+    cout << bitsetToHex<bitset<384>>(digest, 384);
+    cout.flush();  // CRITICAL FIX: Flush output buffer immediately
+    cout << endl;
 }
 
 int main()
