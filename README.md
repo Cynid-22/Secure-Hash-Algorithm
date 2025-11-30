@@ -66,7 +66,7 @@ Tested on a **5 GB .dat file** with SHA-256, this application significantly outp
 
 - `gui.py`: Main Python application entry point.
 - `common.h`: Shared C++ utilities for binary mode and progress reporting.
-- `Sha1.cpp`, `Sha256.cpp`, `Md5.cpp`: C++ implementations of the algorithms.
+- `Sha1.cpp`, `Sha256.cpp`, `Md5.cpp`, ...: C++ implementations of the algorithms.
 - `build.bat`: Script to compile the C++ code.
 
 ## License
