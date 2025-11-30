@@ -239,9 +239,12 @@ class HashCalculator:
         if not os.path.exists(executable_path):
             raise FileNotFoundError(f"Executable not found: {executable_name}")
         
+        # Get file size
+        file_size = os.path.getsize(file_path)
+
         # Launch C++ process
         proc = subprocess.Popen(
-            [executable_path],
+            [executable_path, str(file_size)],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
