@@ -23,6 +23,18 @@
       "type": "executable",
       "executable": "Crc.exe",
       "description": "CRC-32 (32-bit Cyclic Redundancy Check)"
+    },
+    {
+      "name": "MD5",
+      "type": "executable",
+      "executable": "Md5.exe",
+      "description": "MD5 (128-bit Message-Digest Algorithm)"
+    },
+    {
+      "name": "SHA-1",
+      "type": "executable",
+      "executable": "Sha1.exe",
+      "description": "SHA-1 (160-bit Secure Hash Algorithm)"
     }
   ]
 }

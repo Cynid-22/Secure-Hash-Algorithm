@@ -26,6 +26,18 @@ if %errorlevel% neq 0 (
     exit /b %errorlevel%
 )
 
+g++ -O3 -march=native -o Md5.exe Md5.cpp
+if %errorlevel% neq 0 (
+    echo Error compiling Md5.cpp
+    exit /b %errorlevel%
+)
+
+g++ -O3 -march=native -o Sha1.exe Sha1.cpp
+if %errorlevel% neq 0 (
+    echo Error compiling Sha1.cpp
+    exit /b %errorlevel%
+)
+
 echo.
 echo All executables compiled successfully!
 echo Optimization flags: -O3 -march=native
